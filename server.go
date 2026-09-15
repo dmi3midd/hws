@@ -23,7 +23,7 @@ func NewServer(cfg *Config, service URLService) *http.Server {
 func (s *Server) RegisterRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, World!"))
+		writeResponse(w, http.StatusOK, "Hello, World!")
 	})
 	mux.HandleFunc("POST /create/random", s.CreateRandomHandler)
 	mux.HandleFunc("POST /create/custom", s.CreateCustomHandler)
@@ -38,8 +38,7 @@ type CreateRandomRequest struct {
 func (s *Server) CreateRandomHandler(w http.ResponseWriter, r *http.Request) {
 	var reqBody CreateRandomRequest
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Invalid request body"))
+		writeResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -50,8 +49,7 @@ func (s *Server) CreateRandomHandler(w http.ResponseWriter, r *http.Request) {
 			slog.String("error", err.Error()),
 			slog.String("url", reqBody.Url),
 		)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		writeResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -60,8 +58,7 @@ func (s *Server) CreateRandomHandler(w http.ResponseWriter, r *http.Request) {
 		slog.String("alias", alias),
 		slog.String("url", reqBody.Url),
 	)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(alias))
+	writeResponse(w, http.StatusOK, alias)
 }
 
 type CreateCustomRequest struct {
@@ -72,37 +69,33 @@ type CreateCustomRequest struct {
 func (s *Server) CreateCustomHandler(w http.ResponseWriter, r *http.Request) {
 	var reqBody CreateCustomRequest
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Invalid request body"))
+		writeResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	alias, err := s.service.SaveCustom(r.Context(), reqBody.Url, reqBody.Alias)
 	if err != nil {
 		slog.Error(
-			"failed to create random alias",
+			"failed to create custom alias",
 			slog.String("error", err.Error()),
 			slog.String("url", reqBody.Url),
 		)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		writeResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	slog.Info(
-		"created random alias",
+		"created custom alias",
 		slog.String("alias", alias),
 		slog.String("url", reqBody.Url),
 	)
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(alias))
+	writeResponse(w, http.StatusOK, alias)
 }
 
 func (s *Server) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 	alias := r.PathValue("alias")
 	if alias == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("Empty alias"))
+		writeResponse(w, http.StatusBadRequest, "Empty alias")
 		return
 	}
 
@@ -113,8 +106,7 @@ func (s *Server) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 			slog.String("error", err.Error()),
 			slog.String("alias", alias),
 		)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		writeResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -124,4 +116,14 @@ func (s *Server) RedirectHandler(w http.ResponseWriter, r *http.Request) {
 		slog.String("to", url),
 	)
 	http.Redirect(w, r, url, http.StatusMovedPermanently)
+}
+
+func writeResponse(w http.ResponseWriter, status int, body string) {
+	w.WriteHeader(status)
+	if _, err := w.Write([]byte(body)); err != nil {
+		slog.Error(
+			"failed to write response",
+			slog.String("error", err.Error()),
+		)
+	}
 }

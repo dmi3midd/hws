@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dmi3midd/hws"
 	"github.com/dmi3midd/shkvcache"
@@ -31,7 +32,6 @@ func main() {
 		CleanerInterval: 60,
 		RunCleaner:      false,
 	})
-	defer cache.Close()
 	if err != nil {
 		slog.Error(
 			"failed to create cache",
@@ -39,6 +39,7 @@ func main() {
 		)
 		os.Exit(1)
 	}
+	defer cache.Close()
 
 	service := hws.NewURLService(cache)
 
@@ -64,5 +65,14 @@ func main() {
 	<-ctx.Done()
 	slog.Info("received shutdown signal, stopping application...")
 
-	server.Close()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		slog.Error(
+			"failed to stop server",
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
+	}
 }
