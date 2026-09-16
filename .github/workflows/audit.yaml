@@ -22,3 +22,25 @@ jobs:
 
       - name: Test
         run: go test -v -race ./...
+
+  build:
+    name: Build & Docker
+    needs: lint_and_test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: hws:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
